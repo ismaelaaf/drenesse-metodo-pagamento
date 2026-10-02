@@ -1,4 +1,8 @@
 {
+  "functions": {
+    "api/asaas-webhook.js": { "maxDuration": 120 },
+    "api/create-checkout.js": { "maxDuration": 120 }
+  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",

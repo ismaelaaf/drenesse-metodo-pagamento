@@ -3970,3 +3970,6 @@ a {
     display: inline;
   }
 }
+/* Payment confirmation uses the existing form visual system. */
+.payment-order-id { overflow-wrap: anywhere; font-size: 0.78rem; }
+.form-card--success > .primary-button, .form-card--success > .ghost-button { margin-top: 12px; }
