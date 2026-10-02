@@ -4,7 +4,7 @@ async function query(sql, params = []) {
   if (!process.env.DATABASE_URL) throw new Error("Banco de pedidos não configurado.");
   if (!pool) {
     const { default: pg } = await import("pg");
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
+    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
     pool.on("error", () => console.error("Conexão de pedidos interrompida."));
   }
   return pool.query(sql, params);
