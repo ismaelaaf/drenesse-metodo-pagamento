@@ -11,7 +11,12 @@ const SERVER_ENV_KEYS = [
   "LEVER_API_TOKEN",
   "LEVER_BASE_URL",
   "LEVER_PANEL_ID",
-  "LEVER_STEP_ID"
+  "LEVER_STEP_ID",
+  "ASAAS_API_KEY",
+  "ASAAS_ENVIRONMENT",
+  "ASAAS_WEBHOOK_TOKEN",
+  "APP_URL",
+  "DATABASE_URL"
 ];
 
 function localVercelApi() {
@@ -24,7 +29,10 @@ function localVercelApi() {
         const apiModules = {
           "/api/availability": "api/availability.js",
           "/api/capture-lead": "api/capture-lead.js",
-          "/api/submit-booking": "api/submit-booking.js"
+          "/api/submit-booking": "api/submit-booking.js",
+          "/api/create-checkout": "api/create-checkout.js",
+          "/api/order-status": "api/order-status.js",
+          "/api/asaas-webhook": "api/asaas-webhook.js"
         };
 
         if (!apiModules[pathname]) {

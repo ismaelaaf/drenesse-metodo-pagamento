@@ -49,6 +49,8 @@ import {
 } from "./lib/domain.js";
 import { RESULTS } from "./lib/results.js";
 import { pushLeadTypebotEvent } from "./lib/tracking.js";
+import PaymentStatus from "./PaymentStatus.jsx";
+import { newPaymentSession, returnPaymentSession, savePaymentSession } from "./lib/payment-session.js";
 
 const INITIAL_FORM = {
   name: "",
@@ -299,6 +301,8 @@ export default function App() {
   const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
   const [submitState, setSubmitState] = useState("idle");
   const [result, setResult] = useState(null);
+  const [paymentSession, setPaymentSession] = useState(returnPaymentSession);
+  const paymentRequestRef = useRef(null);
   const capturedLeadKeysRef = useRef(new Set());
   const trackedLeadKeysRef = useRef(new Set());
 
@@ -353,6 +357,7 @@ export default function App() {
   const progress = ((step + 1) / FORM_STEPS.length) * 100;
 
   function updateField(field, value) {
+    paymentRequestRef.current = null;
     setForm((current) => ({
       ...current,
       [field]: value,
@@ -449,10 +454,12 @@ export default function App() {
     }
 
     try {
-      const response = await fetch("/api/submit-booking", {
+      paymentRequestRef.current ||= newPaymentSession();
+      const session = paymentRequestRef.current;
+      const response = await fetch("/api/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ ...payload, ...session })
       });
       const data = await response.json().catch(() => ({}));
       if (data.bookingStatus === "ineligible") {
@@ -464,22 +471,11 @@ export default function App() {
         return;
       }
       if (!response.ok) throw new Error(data.message || "Não foi possível concluir agora.");
+      savePaymentSession(session);
       setResult(data);
-      setSubmitState("success");
-      window.setTimeout(() => {
-        window.location.href =
-          data.whatsappUrl ||
-          buildWhatsAppUrl({
-            number: WHATSAPP_NUMBER,
-            name: payload.name,
-            phone: payload.phone,
-            unit: selectedUnit,
-            objective: selectedObjective,
-            workRoutine: selectedWorkRoutine,
-            slot: payload.slot,
-            bookingStatus: "fallback"
-          });
-      }, 1800);
+      setPaymentSession(session);
+      setSubmitState("checkout");
+      if (data.checkoutUrl) window.location.assign(data.checkoutUrl);
     } catch (submitError) {
       setSubmitState("error");
       setError(submitError.message || "Não foi possível concluir agora.");
@@ -535,7 +531,7 @@ export default function App() {
               </a>
             </div>
             <p className="promo-disclaimer">
-              Resultados variam conforme avaliação individual. <span>O site não realiza cobranças.</span>
+              Resultados variam conforme avaliação individual. <span>Pagamento pelo Asaas; agendamento após confirmação.</span>
             </p>
           </div>
 
@@ -567,7 +563,7 @@ export default function App() {
           </article>
           <CountdownPill countdown={countdown} compact />
         </div>
-        <LeadForm
+        {paymentSession ? <PaymentStatus session={paymentSession} initialOrder={result} contactUrl={GENERAL_WHATSAPP_URL} /> : <LeadForm
           availability={availability}
           availabilityMeta={availabilityMeta}
           availabilityState={availabilityState}
@@ -586,7 +582,7 @@ export default function App() {
           submitBooking={submitBooking}
           submitState={submitState}
           updateField={updateField}
-        />
+        />}
       </section>
       <SiteFooter />
     </main>
@@ -1128,25 +1124,6 @@ function LeadForm({
     );
   }
 
-  if (submitState === "success") {
-    return (
-      <section className="form-card form-card--success" aria-live="polite">
-        <div className="success-mark">
-          <Check aria-hidden="true" size={28} />
-        </div>
-        <h2>{result?.bookingStatus === "confirmed" ? "Sessão solicitada" : "Pedido recebido"}</h2>
-        <p>
-          Já estamos te encaminhando para o WhatsApp da equipe Drenesse para confirmar os detalhes.
-        </p>
-        {result?.whatsappUrl && (
-          <a className="primary-button" href={result.whatsappUrl}>
-            Abrir WhatsApp
-          </a>
-        )}
-      </section>
-    );
-  }
-
   return (
     <form className="form-card" onSubmit={submitBooking}>
       <div className="progress-block">
@@ -1217,12 +1194,12 @@ function LeadForm({
               {submitState === "loading" ? (
                 <>
                   <Loader2 aria-hidden="true" className="spin" size={18} />
-                  Reservando sessão
+                  Preparando pagamento
                 </>
               ) : (
                 <>
                   <CalendarCheck aria-hidden="true" size={18} />
-                  Agendar agora
+                  Continuar para pagamento
                 </>
               )}
             </button>
@@ -1234,6 +1211,7 @@ function LeadForm({
         )}
       </div>
 
+      {isFinalStep && <p className="safe-note">O agendamento será registrado após a confirmação do pagamento pelo Asaas. O horário será conferido novamente nesse momento.</p>}
       <p className="safe-note">
         <Lock aria-hidden="true" size={14} />
         Seus dados estão seguros. Sem spam.

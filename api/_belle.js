@@ -85,7 +85,8 @@ export async function belleFetch(path, { method = "GET", query, body } = {}) {
       Authorization: token,
       ...(body ? { "Content-Type": "application/json" } : {})
     },
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10000)
   });
 
   const text = await response.text();

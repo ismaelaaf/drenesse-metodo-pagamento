@@ -36,6 +36,7 @@ export const PROMOTION = Object.freeze({
   duration: 60,
   regularPrice: "R$ 159,90",
   promotionalPrice: "R$ 89,90",
+  promotionalPriceCents: 8990,
   campaignLabel: "Campanha de R$ 159,90 por R$ 89,90"
 });
 

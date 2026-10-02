@@ -7,14 +7,18 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node tests/form.test.mjs && node tests/availability.test.mjs && node tests/booking.test.mjs && node tests/lever.test.mjs"
+    "test": "node tests/form.test.mjs && node tests/availability.test.mjs && node tests/booking.test.mjs && node tests/lever.test.mjs && node tests/payment.test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "lucide-react": "^0.468.0",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "swiper": "^14.0.2",
     "vite": "^6.0.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
   }
 }
