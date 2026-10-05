@@ -47,56 +47,98 @@ export const SELLER = Object.freeze({
 
 export const OBJECTIVES = [
   {
-    id: "corporal",
-    title: "Corporal",
-    label: "Corporal",
+    id: "gordura-localizada",
+    title: "Gordura localizada",
+    label: "Gordura localizada",
     belleObservationCode: 1,
-    description: "Gordura localizada, flacidez, celulite, estrias ou retenção."
   },
   {
-    id: "facial",
-    title: "Facial",
-    label: "Facial",
-    belleObservationCode: 2,
-    description: "Manchas, acne, rejuvenescimento, bioestímulo ou textura da pele."
+    id: "flacidez",
+    title: "Flacidez",
+    label: "Flacidez",
+    belleObservationCode: 1
   },
   {
-    id: "corporal-facial",
-    title: "Corporal e facial",
-    label: "Corporal e facial",
-    belleObservationCode: 4,
-    description: "Quero avaliar mais de uma queixa na consulta."
+    id: "celulite",
+    title: "Celulite",
+    label: "Celulite",
+    belleObservationCode: 1
+  },
+  {
+    id: "inchaco-retencao",
+    title: "Inchaço/retenção",
+    label: "Inchaço/retenção",
+    belleObservationCode: 1
+  },
+  {
+    id: "gluteos",
+    title: "Glúteos",
+    label: "Glúteos",
+    belleObservationCode: 1
+  },
+  {
+    id: "rosto",
+    title: "Rosto",
+    label: "Rosto",
+    belleObservationCode: 2
+  },
+  {
+    id: "outro",
+    title: "Outro",
+    label: "Outro",
+    belleObservationCode: 4
   }
+];
+
+export const INVESTMENT_RANGES = [
+  { id: "300", title: "R$ 300", label: "R$ 300" },
+  { id: "300-800", title: "R$ 300 a R$ 800", label: "R$ 300 a R$ 800" },
+  { id: "800-1200", title: "R$ 800 a R$ 1.200", label: "R$ 800 a R$ 1.200" },
+  { id: "acima-1200", title: "Acima de R$ 1.200", label: "Acima de R$ 1.200" },
+  { id: "nao-sei", title: "Não sei informar ainda", label: "Não sei informar ainda" }
 ];
 
 export const WORK_ROUTINES = [
   {
-    id: "em-pe",
-    title: "Trabalho em pé",
-    label: "Trabalho em pé",
-    description: "Passo boa parte da rotina em pé ou me movimentando."
+    id: "trabalho-estudo",
+    title: "Trabalho e estudo",
+    label: "Trabalho e estudo"
   },
   {
-    id: "sentado",
-    title: "Trabalho sentado(a)",
-    label: "Trabalho sentado(a)",
-    description: "Passo boa parte da rotina sentada ou em posição fixa."
+    id: "trabalho",
+    title: "Trabalho",
+    label: "Trabalho"
+  },
+  {
+    id: "estudo",
+    title: "Estudo",
+    label: "Estudo"
   },
   {
     id: "sem-ocupacao",
-    title: "Sem ocupação",
-    label: "Sem ocupação",
-    description: "No momento não atuo em uma ocupação fixa."
+    title: "Atualmente sem ocupação",
+    label: "Atualmente sem ocupação"
   }
 ];
 
 export const FORM_STEPS = [
   { key: "dados", label: "Dados" },
-  { key: "unidade", label: "Unidade" },
-  { key: "objetivo", label: "Objetivo" },
+  { key: "objetivos", label: "Objetivos" },
   { key: "rotina", label: "Rotina" },
+  { key: "unidade", label: "Unidade" },
   { key: "horario", label: "Horário" }
 ];
+
+const LEGACY_OBJECTIVES = {
+  corporal: { id: "corporal", title: "Corporal", label: "Corporal", belleObservationCode: 1 },
+  facial: { id: "facial", title: "Facial", label: "Facial", belleObservationCode: 2 },
+  "corporal-facial": { id: "corporal-facial", title: "Corporal e facial", label: "Corporal e facial", belleObservationCode: 4 }
+};
+
+const LEGACY_WORK_ROUTINES = {
+  "em-pe": { id: "em-pe", title: "Trabalho em pé", label: "Trabalho em pé" },
+  sentado: { id: "sentado", title: "Trabalho sentado(a)", label: "Trabalho sentado(a)" }
+};
 
 export function onlyDigits(value = "") {
   return String(value).replace(/\D/g, "");
@@ -136,11 +178,15 @@ export function getUnit(code) {
 }
 
 export function getObjective(id) {
-  return OBJECTIVES.find((objective) => objective.id === id) || null;
+  return OBJECTIVES.find((objective) => objective.id === id) || LEGACY_OBJECTIVES[id] || null;
+}
+
+export function getInvestment(id) {
+  return INVESTMENT_RANGES.find((investment) => investment.id === id) || null;
 }
 
 export function getWorkRoutine(id) {
-  return WORK_ROUTINES.find((routine) => routine.id === id) || null;
+  return WORK_ROUTINES.find((routine) => routine.id === id) || LEGACY_WORK_ROUTINES[id] || null;
 }
 
 export function toBelleDate(dateInput = new Date()) {
@@ -172,6 +218,7 @@ export function buildWhatsAppUrl({
   phone,
   unit,
   objective,
+  investment,
   workRoutine,
   slot,
   bookingStatus,
@@ -181,6 +228,7 @@ export function buildWhatsAppUrl({
 }) {
   const unitName = unit?.name || "Unidade a confirmar";
   const objectiveLabel = objective?.label || "Objetivo a confirmar";
+  const investmentLabel = investment?.label || "Investimento a confirmar";
   const workRoutineLabel = workRoutine?.label || "Rotina a confirmar";
   const desiredTime = slot?.date && slot?.time ? `${slot.date} às ${slot.time}` : "Horário a confirmar";
   const rangeLabel = range?.startDate && range?.endDate ? `${range.startDate} a ${range.endDate}` : "nos próximos dias";
@@ -199,6 +247,7 @@ export function buildWhatsAppUrl({
     name ? `Nome: ${name}` : "",
     unit ? `Unidade: ${unitName}` : "",
     objective ? `Objetivo: ${objectiveLabel}` : "",
+    investment ? `Investimento mensal: ${investmentLabel}` : "",
     workRoutine ? `Rotina: ${workRoutineLabel}` : "",
     !isGeneralContact ? `Preferência: ${desiredTime}` : "",
     bookingCode ? `Código do agendamento: ${bookingCode}` : ""

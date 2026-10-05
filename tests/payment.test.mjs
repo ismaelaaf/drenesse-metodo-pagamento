@@ -15,6 +15,7 @@ await db.exec(await readFile(new URL("../db/001-payment-orders.sql", import.meta
 const store = createOrderStore((sql, params) => db.query(sql, params));
 const config = { environment: "sandbox", appUrl: "http://localhost:5173", checkoutOrigin: "https://sandbox.asaas.com" };
 const webhookToken = randomBytes(32).toString("hex");
+const fixedNow = new Date("2026-10-05T15:00:00Z");
 
 assert.equal(
   new URL(databaseConnectionString("postgresql://postgres.test:secret@pooler.supabase.com:6543/postgres?sslmode=require")).searchParams.get("uselibpqcompat"),
@@ -24,19 +25,24 @@ assert.equal(
 function input() {
   return {
     orderId: randomUUID(), accessToken: randomBytes(32).toString("hex"),
-    name: "Maria Teste", phone: "84999999999", unitCode: 1, objectiveId: "corporal", workRoutineId: "sentado",
+    name: "Maria Teste", phone: "84999999999", unitCode: 1, objectiveId: "gordura-localizada", investmentId: "300-800", workRoutineId: "trabalho",
     slot: { date: "09/10/2026", time: "14:30", professionalCode: "42", professionalName: "Profissional Teste" },
     // The caller cannot set the price or payment/booking status.
     amount_cents: 1, paid_at: new Date().toISOString(), bookingStatus: "confirmed"
   };
 }
 
-function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, existing = false, booking = { dis: true, codAgendamento: 888 }, bookingError = false } = {}) {
+function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, existing = false, recentAppointment = false, booking = { dis: true, codAgendamento: 888 }, bookingError = false } = {}) {
   const writes = [];
   const requests = [];
   async function belle(path, options) {
     if (options?.method === "POST") writes.push(path);
-    if (path === "/cliente/listar") return existing ? { codigo: 456 } : [];
+    if (path === "/cliente/listar") return existing && Number(options.query.codEstab) === 1 ? { codigo: 456 } : [];
+    if (path === "/agendamentos/finalizados") return recentAppointment ? [{
+      codConsulta: 777,
+      dtAgenda: "20/09/2026",
+      cliente: { cod: "456", celular: "(84) 9 9999-9999" }
+    }] : [];
     if (path === "/agenda/disponibilidade") return [{ data: "09/10/2026", horarios: [{ codProf: "42", nome: "Profissional Teste", horarios: available ? [{ horario: "14:30", cod: "l" }] : [] }] }];
     if (path === "/cliente/gravar-lead") return { codigo: 1234 };
     if (path === "/agenda/gravar") {
@@ -52,7 +58,7 @@ function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, e
     if (path.startsWith("/payments?checkoutSession=")) return { data: [{ id: `pay_${randomUUID()}`, status: paymentStatus, billingType: "PIX", value }] };
     throw new Error(`Unexpected Asaas path: ${path}`);
   }
-  return { store, belle, provider, writes, requests, config };
+  return { store, belle, provider, writes, requests, config, now: () => fixedNow };
 }
 
 function paidEvent(order, overrides = {}) {
@@ -174,11 +180,24 @@ try {
 
   const interruptedServices = mocks();
   const interruptedOrder = await createPaymentOrder(input(), interruptedServices);
-  const processing = await store.update(interruptedOrder.id, { status: "processing", paid_at: new Date().toISOString(), processing_at: new Date(Date.now() - 240000).toISOString() }, ["pending"]);
+  const processing = await store.update(interruptedOrder.id, { status: "processing", paid_at: fixedNow.toISOString(), processing_at: new Date(fixedNow.getTime() - 240000).toISOString() }, ["pending"]);
   assert.equal((await fulfillPaidOrder(processing, interruptedServices)).status, "needs_attention");
   assert.deepEqual(interruptedServices.writes, []);
 
-  await assert.rejects(createPaymentOrder(input(), mocks({ existing: true })), { statusCode: 403 });
+  const returningServices = mocks({ existing: true });
+  const returningOrder = await createPaymentOrder(input(), returningServices);
+  const returningResult = await handleCheckoutEvent(paidEvent(returningOrder), returningServices);
+  assert.equal(returningResult.status, "confirmed", "An existing client without an appointment in 30 days is eligible");
+  assert.deepEqual(returningServices.writes, ["/agenda/gravar"], "The existing Belle client is reused instead of duplicated");
+
+  await assert.rejects(createPaymentOrder(input(), mocks({ existing: true, recentAppointment: true })), { statusCode: 403 });
+
+  const eligibilityChangedOrder = await createPaymentOrder(input(), mocks({ existing: true }));
+  const recentlyBooked = mocks({ existing: true, recentAppointment: true });
+  const eligibilityChanged = await handleCheckoutEvent(paidEvent(eligibilityChangedOrder), recentlyBooked);
+  assert.equal(eligibilityChanged.status, "needs_attention");
+  assert.equal((await store.get(eligibilityChangedOrder.id)).attention_reason, "recent-appointment");
+  assert.deepEqual(recentlyBooked.writes, []);
   await assert.rejects(createPaymentOrder(input(), mocks({ available: false })), { statusCode: 409 });
   assert.throws(() => checkoutUrl({ id: "test", link: "https://example.com/phishing" }, config));
   assert.deepEqual(await handleCheckoutEvent({ event: "PAYMENT_AUTHORIZED" }, services), { ignored: true });

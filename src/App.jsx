@@ -34,6 +34,7 @@ import "swiper/css/navigation";
 import "swiper/css/pagination";
 import {
   FORM_STEPS,
+  INVESTMENT_RANGES,
   OBJECTIVES,
   PROMOTION,
   UNITS,
@@ -41,6 +42,7 @@ import {
   buildWhatsAppUrl,
   formatLongDate,
   formatPhone,
+  getInvestment,
   getObjective,
   getUnit,
   getWorkRoutine,
@@ -57,6 +59,7 @@ const INITIAL_FORM = {
   phone: "",
   unitCode: "",
   objectiveId: "",
+  investmentId: "",
   workRoutineId: "",
   slot: null
 };
@@ -177,6 +180,15 @@ function formatCountdown(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function uniqueSlotsByTime(slots) {
+  const seen = new Set();
+  return slots.filter((slot) => {
+    if (seen.has(slot.time)) return false;
+    seen.add(slot.time);
+    return true;
+  });
 }
 
 function useCountdown(initialSeconds) {
@@ -308,6 +320,7 @@ export default function App() {
 
   const selectedUnit = useMemo(() => getUnit(form.unitCode), [form.unitCode]);
   const selectedObjective = useMemo(() => getObjective(form.objectiveId), [form.objectiveId]);
+  const selectedInvestment = useMemo(() => getInvestment(form.investmentId), [form.investmentId]);
   const selectedWorkRoutine = useMemo(() => getWorkRoutine(form.workRoutineId), [form.workRoutineId]);
   const countdown = useCountdown(COUNTDOWN_SECONDS);
   useScrollReveal();
@@ -361,7 +374,7 @@ export default function App() {
     setForm((current) => ({
       ...current,
       [field]: value,
-      ...(["unitCode", "objectiveId", "workRoutineId"].includes(field) ? { slot: null } : {})
+      ...(["unitCode", "objectiveId", "investmentId", "workRoutineId"].includes(field) ? { slot: null } : {})
     }));
     if (field === "unitCode") {
       setAvailability([]);
@@ -377,9 +390,10 @@ export default function App() {
       const phoneError = validateMobile(form.phone);
       if (phoneError) return phoneError;
     }
-    if (currentStep === 1 && !selectedUnit) return "Escolha a unidade de preferência.";
-    if (currentStep === 2 && !selectedObjective) return "Escolha o objetivo do atendimento.";
-    if (currentStep === 3 && !selectedWorkRoutine) return "Escolha como você trabalha.";
+    if (currentStep === 1 && !selectedObjective) return "Escolha seu principal incômodo.";
+    if (currentStep === 1 && !selectedInvestment) return "Escolha quanto pretende investir mensalmente.";
+    if (currentStep === 2 && !selectedWorkRoutine) return "Escolha sua rotina atual.";
+    if (currentStep === 3 && !selectedUnit) return "Escolha a unidade de preferência.";
     if (currentStep === 4 && !form.slot) return "Escolha um horário disponível.";
     return "";
   }
@@ -436,6 +450,7 @@ export default function App() {
       phone: normalizeBrazilianMobile(form.phone),
       unitCode: Number(form.unitCode),
       objectiveId: form.objectiveId,
+      investmentId: form.investmentId,
       workRoutineId: form.workRoutineId,
       slot: form.slot,
       tracking: getTrackingPayload()
@@ -447,6 +462,7 @@ export default function App() {
         phone: payload.phone,
         unidade: selectedUnit?.name,
         objetivo: selectedObjective?.label,
+        investimento: selectedInvestment?.label,
         rotina: selectedWorkRoutine?.label,
         horario: `${payload.slot.date} às ${payload.slot.time}`
       });
@@ -575,6 +591,7 @@ export default function App() {
           retryAvailability={retryAvailability}
           result={result}
           selectedObjective={selectedObjective}
+          selectedInvestment={selectedInvestment}
           selectedUnit={selectedUnit}
           selectedWorkRoutine={selectedWorkRoutine}
           setStep={setStep}
@@ -1068,6 +1085,7 @@ function LeadForm({
   progress,
   retryAvailability,
   result,
+  selectedInvestment,
   selectedObjective,
   selectedUnit,
   selectedWorkRoutine,
@@ -1096,6 +1114,7 @@ function LeadForm({
     phone: normalizeBrazilianMobile(form.phone),
     unit: selectedUnit,
     objective: selectedObjective,
+    investment: selectedInvestment,
     workRoutine: selectedWorkRoutine,
     reason: fallbackReason,
     range: availabilityMeta
@@ -1108,10 +1127,10 @@ function LeadForm({
         <div className="success-mark">
           <HeartHandshake aria-hidden="true" size={28} />
         </div>
-        <h2>Você já aproveitou este benefício</h2>
+        <h2>Esta condição estará disponível em breve</h2>
         <p>
-          Encontramos este WhatsApp em nosso cadastro, então esta condição especial não pode ser utilizada novamente.
-          Nossa equipe terá prazer em apresentar outras opções do Método Drenesse.
+          Encontramos um atendimento vinculado a este WhatsApp nos últimos 30 dias. Após esse período, você poderá
+          utilizar esta condição; nossa equipe também pode apresentar outras opções agora.
         </p>
         <p className="redirect-note">Estamos te encaminhando para o atendimento pelo WhatsApp.</p>
         {result?.whatsappUrl && (
@@ -1142,15 +1161,16 @@ function LeadForm({
 
       <div className="step-body">
         {step === 0 && <DataStep form={form} updateField={updateField} />}
-        {step === 1 && <UnitStep form={form} updateField={updateField} />}
-        {step === 2 && <ObjectiveStep form={form} updateField={updateField} />}
-        {step === 3 && <RoutineStep form={form} updateField={updateField} />}
+        {step === 1 && <ObjectiveStep form={form} updateField={updateField} />}
+        {step === 2 && <RoutineStep form={form} updateField={updateField} />}
+        {step === 3 && <UnitStep form={form} updateField={updateField} />}
         {step === 4 && (
           <ScheduleStep
             availability={availability}
             availabilityMeta={availabilityMeta}
             availabilityState={availabilityState}
             form={form}
+            selectedInvestment={selectedInvestment}
             selectedObjective={selectedObjective}
             selectedUnit={selectedUnit}
             selectedWorkRoutine={selectedWorkRoutine}
@@ -1224,9 +1244,9 @@ function StepNav({ form, setStep, step }) {
   const enabledStep = [
     true,
     form.name.trim().length >= 2 && !validateMobile(form.phone),
-    Boolean(form.unitCode),
-    Boolean(form.objectiveId),
-    Boolean(form.workRoutineId)
+    Boolean(form.objectiveId) && Boolean(form.investmentId),
+    Boolean(form.workRoutineId),
+    Boolean(form.unitCode)
   ];
 
   return (
@@ -1330,8 +1350,8 @@ function UnitStep({ form, updateField }) {
 function ObjectiveStep({ form, updateField }) {
   return (
     <div className="field-stack">
-      <h2 className="step-title">Qual é o foco do seu atendimento?</h2>
-      <div className="objective-list">
+      <h2 className="step-title">Qual é o seu principal incômodo hoje?</h2>
+      <div className="objective-list concern-list">
         {OBJECTIVES.map((objective) => {
           const active = form.objectiveId === objective.id;
           return (
@@ -1346,7 +1366,27 @@ function ObjectiveStep({ form, updateField }) {
                 <Stethoscope aria-hidden="true" size={18} />
               </span>
               <strong>{objective.title}</strong>
-              <small>{objective.description}</small>
+            </button>
+          );
+        })}
+      </div>
+
+      <h2 className="step-title step-title--secondary">Quanto está disposto(a) a investir em si mesmo(a) mensalmente?</h2>
+      <div className="objective-list investment-list">
+        {INVESTMENT_RANGES.map((investment) => {
+          const active = form.investmentId === investment.id;
+          return (
+            <button
+              className={active ? "objective-option objective-option--active" : "objective-option"}
+              data-testid={`investment-${investment.id}`}
+              key={investment.id}
+              onClick={() => updateField("investmentId", investment.id)}
+              type="button"
+            >
+              <span>
+                <Check aria-hidden="true" size={18} />
+              </span>
+              <strong>{investment.title}</strong>
             </button>
           );
         })}
@@ -1358,7 +1398,7 @@ function ObjectiveStep({ form, updateField }) {
 function RoutineStep({ form, updateField }) {
   return (
     <div className="field-stack">
-      <h2 className="step-title">Como você trabalha na maior parte do dia?</h2>
+      <h2 className="step-title">Qual é a sua rotina atual?</h2>
       <div className="objective-list routine-list">
         {WORK_ROUTINES.map((routine) => {
           const active = form.workRoutineId === routine.id;
@@ -1374,7 +1414,6 @@ function RoutineStep({ form, updateField }) {
                 <UserRound aria-hidden="true" size={18} />
               </span>
               <strong>{routine.title}</strong>
-              <small>{routine.description}</small>
             </button>
           );
         })}
@@ -1389,6 +1428,7 @@ function ScheduleStep({
   availabilityState,
   form,
   retryAvailability,
+  selectedInvestment,
   selectedObjective,
   selectedUnit,
   selectedWorkRoutine,
@@ -1458,6 +1498,7 @@ function ScheduleStep({
       <div className="schedule-summary">
         <span>{selectedUnit?.name}</span>
         <strong>{selectedObjective?.label}</strong>
+        <small>{selectedInvestment?.label}</small>
         <small>{selectedWorkRoutine?.label}</small>
       </div>
 
@@ -1465,11 +1506,12 @@ function ScheduleStep({
         {availability.map((day) => {
           const daySlots = day.slots || [];
           if (!daySlots.length) return null;
+          const visibleSlots = uniqueSlotsByTime(daySlots);
           return (
             <section className="slot-day" key={day.date}>
               <h3>{formatLongDate(day.date)}</h3>
               <div className="slot-list">
-                {daySlots.slice(0, 18).map((slot) => {
+                {visibleSlots.slice(0, 18).map((slot) => {
                   const active = form.slot?.id === slot.id;
                   return (
                     <button
@@ -1480,7 +1522,6 @@ function ScheduleStep({
                       type="button"
                     >
                       <strong>{slot.time}</strong>
-                      <span>{slot.professionalName}</span>
                     </button>
                   );
                 })}

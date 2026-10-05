@@ -1498,19 +1498,35 @@ a {
   line-height: 1.2;
 }
 
+.step-title--secondary {
+  margin-top: 18px;
+}
+
 .objective-list {
   display: grid;
   gap: 10px;
 }
 
+.concern-list,
+.investment-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .objective-option {
-  min-height: 74px;
+  min-height: 62px;
   display: grid;
   grid-template-columns: 34px 1fr;
   column-gap: 12px;
   align-items: center;
   text-align: left;
   padding: 13px 16px;
+}
+
+@media (max-width: 560px) {
+  .concern-list,
+  .investment-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .objective-option span {

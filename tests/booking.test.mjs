@@ -4,8 +4,8 @@ import {
   buildBenefitUsedWhatsapp,
   buildObservation
 } from "../api/_belle.js";
-import { BOOKING_ENDPOINT, buildBookingBody, findExistingClientByPhone } from "../api/submit-booking.js";
-import { PROMOTION, SELLER, getObjective, getUnit, getWorkRoutine } from "../src/lib/domain.js";
+import { BOOKING_ENDPOINT, buildBookingBody, checkPhoneEligibility, findExistingClientByPhone } from "../api/submit-booking.js";
+import { PROMOTION, SELLER, getInvestment, getObjective, getUnit, getWorkRoutine } from "../src/lib/domain.js";
 
 const payload = {
   slot: {
@@ -19,7 +19,7 @@ const payload = {
 const body = buildBookingBody({
   leadCode: "1234",
   unit: getUnit(1),
-  objective: getObjective("corporal"),
+  objective: getObjective("gordura-localizada"),
   payload,
   observation: "Campanha de teste"
 });
@@ -42,15 +42,18 @@ const observation = buildObservation({
   name: "Maria",
   phone: "84999999999",
   unit: getUnit(1),
-  objective: getObjective("corporal"),
-  workRoutine: getWorkRoutine("sentado"),
+  objective: getObjective("gordura-localizada"),
+  investment: getInvestment("300-800"),
+  workRoutine: getWorkRoutine("trabalho"),
   slot: payload.slot,
   tracking: { utm_source: "teste", utm_campaign: "metodo-drenesse" }
 });
 assert.match(observation, /Serviço: 22 - DRENAGEM MÉTODO DRENESSE/);
 assert.match(observation, /Duração: 60 minutos/);
 assert.match(observation, /Campanha: de R\$ 159,90 por R\$ 89,90/);
-assert.match(observation, /Rotina: Trabalho sentado\(a\)/);
+assert.match(observation, /Principal incômodo: Gordura localizada/);
+assert.match(observation, /Investimento mensal: R\$ 300 a R\$ 800/);
+assert.match(observation, /Rotina: Trabalho/);
 assert.match(observation, /Vendedor: Ismael Anderson de Araújo Figueiredo/);
 
 const searchedUnits = [];
@@ -61,9 +64,28 @@ const existingClient = await findExistingClientByPhone("+55 (84) 9 8830-7853", 2
   assert.equal(query.cpf, "");
   return query.codEstab === 3 ? { codigo: 9876 } : [];
 });
-assert.deepEqual(searchedUnits, [2, 1, 3]);
-assert.deepEqual(searchedPhones, ["84988307853", "84988307853", "84988307853"]);
+assert.deepEqual(searchedUnits, [2, 1, 3, 6]);
+assert.deepEqual(searchedPhones, ["84988307853", "84988307853", "84988307853", "84988307853"]);
 assert.deepEqual(existingClient, { clientCode: "9876", unitCode: 3 });
+
+async function eligibilityFor(appointmentDate) {
+  return checkPhoneEligibility("84988307853", 1, {
+    now: () => new Date("2026-10-05T15:00:00Z"),
+    fetcher: async (path, { query }) => {
+      if (path === "/cliente/listar") return query.codEstab === 1 ? { codigo: 9876 } : [];
+      if (path === "/agendamentos/finalizados") return [{
+        codConsulta: 123,
+        dtAgenda: appointmentDate,
+        codEstab: "1",
+        cliente: { cod: "9876", celular: "(84) 9 8830-7853" }
+      }];
+      throw new Error(`Unexpected path: ${path}`);
+    }
+  });
+}
+
+assert.equal((await eligibilityFor("06/09/2026")).eligible, false, "Appointment 29 days ago blocks the offer");
+assert.equal((await eligibilityFor("05/09/2026")).eligible, true, "Appointment exactly 30 days ago is allowed");
 
 const benefitUsedUrl = buildBenefitUsedWhatsapp();
 assert.equal(new URL(benefitUsedUrl).searchParams.get("text"), BENEFIT_USED_WHATSAPP_MESSAGE);
