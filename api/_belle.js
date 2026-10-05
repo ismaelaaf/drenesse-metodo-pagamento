@@ -3,6 +3,7 @@ import {
   SELLER,
   buildWhatsAppUrl,
   getObjective,
+  getInvestment,
   getUnit,
   getWorkRoutine,
   normalizeBrazilianMobile,
@@ -149,7 +150,7 @@ export function extractClientCode(data) {
   return String(data.codigo || data.codCliente || data.cod_cliente || "");
 }
 
-export function buildObservation({ name, phone, unit, objective, workRoutine, slot, tracking }) {
+export function buildObservation({ name, phone, unit, objective, investment, workRoutine, slot, tracking }) {
   const lines = [
     "Landing Campanha Método Drenesse",
     `Serviço: ${PROMOTION.serviceLabel}`,
@@ -158,7 +159,8 @@ export function buildObservation({ name, phone, unit, objective, workRoutine, sl
     `Nome: ${name}`,
     `WhatsApp: ${phone}`,
     `Unidade: ${unit?.name || ""}`,
-    `Objetivo: ${objective?.label || ""}`,
+    `Principal incômodo: ${objective?.label || ""}`,
+    `Investimento mensal: ${investment?.label || ""}`,
     `Rotina: ${workRoutine?.label || ""}`,
     `Vendedor: ${SELLER.name}`,
     `Preferência: ${slot?.date || ""} ${slot?.time || ""}`,
@@ -174,6 +176,7 @@ export function buildFallbackWhatsapp(payload, bookingStatus = "fallback", booki
   const { whatsappNumber } = getServerConfig();
   const unit = getUnit(payload.unitCode);
   const objective = getObjective(payload.objectiveId);
+  const investment = getInvestment(payload.investmentId);
   const workRoutine = getWorkRoutine(payload.workRoutineId);
   return buildWhatsAppUrl({
     number: whatsappNumber,
@@ -181,6 +184,7 @@ export function buildFallbackWhatsapp(payload, bookingStatus = "fallback", booki
     phone: normalizeBrazilianMobile(payload.phone),
     unit,
     objective,
+    investment,
     workRoutine,
     slot: payload.slot,
     bookingStatus,

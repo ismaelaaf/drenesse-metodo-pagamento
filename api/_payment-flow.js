@@ -1,6 +1,6 @@
-import { PROMOTION, getObjective, getUnit, getWorkRoutine, normalizeBrazilianMobile } from "../src/lib/domain.js";
+import { PROMOTION, getInvestment, getObjective, getUnit, getWorkRoutine, normalizeBrazilianMobile } from "../src/lib/domain.js";
 import { belleFetch, buildObservation, extractClientCode, flattenAvailability, getServerConfig, buildFallbackWhatsapp } from "./_belle.js";
-import { BOOKING_ENDPOINT, buildBookingBody, findExistingClientByPhone, validatePayload } from "./_booking.js";
+import { BOOKING_ENDPOINT, buildBookingBody, checkPhoneEligibility, validatePayload } from "./_booking.js";
 import { buildAvailabilityQuery } from "./availability.js";
 import { asaasFetch, buildCheckoutBody, checkoutUrl, tokenHash, verifyCheckoutPayment } from "./_asaas.js";
 import { orderStore } from "./_orders.js";
@@ -19,7 +19,7 @@ export async function availableSlot(payload, fetcher = belleFetch) {
   ));
 }
 
-export async function createPaymentOrder(input, { store = orderStore, provider = asaasFetch, belle = belleFetch, config } = {}) {
+export async function createPaymentOrder(input, { store = orderStore, provider = asaasFetch, belle = belleFetch, config, now = () => new Date() } = {}) {
   const validation = validatePayload(input);
   if (validation) throw flowError(validation, 400);
   if (!ORDER_ID_PATTERN.test(input.orderId || "") || !ACCESS_TOKEN_PATTERN.test(input.accessToken || "")) {
@@ -35,11 +35,12 @@ export async function createPaymentOrder(input, { store = orderStore, provider =
 
   const payload = {
     name: String(input.name).trim().slice(0, 150), phone: normalizeBrazilianMobile(input.phone),
-    unitCode: Number(input.unitCode), objectiveId: input.objectiveId, workRoutineId: input.workRoutineId,
+    unitCode: Number(input.unitCode), objectiveId: input.objectiveId, investmentId: input.investmentId, workRoutineId: input.workRoutineId,
     slot: { date: input.slot.date, time: input.slot.time, professionalCode: String(input.slot.professionalCode), professionalName: String(input.slot.professionalName || "Profissional Drenesse").slice(0, 100) },
     tracking: Object.fromEntries(["page", "referrer", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, String(input.tracking?.[key] || "").slice(0, 500)]))
   };
-  if (await findExistingClientByPhone(payload.phone, payload.unitCode, belle)) throw flowError("Este WhatsApp já está cadastrado e o benefício é limitado a uma utilização por pessoa.", 403);
+  const eligibility = await checkPhoneEligibility(payload.phone, payload.unitCode, { fetcher: belle, now });
+  if (!eligibility.eligible) throw flowError("Este WhatsApp possui um atendimento nos últimos 30 dias e ainda não pode utilizar esta condição.", 403);
   if (!await availableSlot(payload, belle)) throw flowError("Este horário não está mais disponível. Escolha outra opção antes de pagar.", 409);
 
   const order = await store.create({ id: input.orderId, access_token_hash: tokenHash(input.accessToken), payload, amount_cents: PROMOTION.promotionalPriceCents });
@@ -72,24 +73,29 @@ export async function fulfillPaidOrder(order, { store = orderStore, belle = bell
   const payload = claimed.payload;
   const unit = getUnit(payload.unitCode);
   const objective = getObjective(payload.objectiveId);
+  const investment = getInvestment(payload.investmentId);
   const workRoutine = getWorkRoutine(payload.workRoutineId);
   let reason = "availability-error";
   try {
     if (!await availableSlot(payload, belle)) {
       return await store.update(order.id, { status: "needs_attention", attention_reason: "slot-unavailable" }, ["processing"]);
     }
-    reason = "eligibility-changed";
-    if (await findExistingClientByPhone(payload.phone, unit.code, belle)) {
+    reason = "recent-appointment";
+    const eligibility = await checkPhoneEligibility(payload.phone, unit.code, { fetcher: belle, now });
+    if (!eligibility.eligible) {
       return await store.update(order.id, { status: "needs_attention", attention_reason: reason }, ["processing"]);
     }
-    const observation = `${buildObservation({ ...payload, unit, objective, workRoutine })} | Pagamento Asaas confirmado | Pedido: ${order.id} | Cobrança: ${order.payment_id}`;
-    reason = "lead-creation";
-    const lead = await belle("/cliente/gravar-lead", { method: "POST", body: {
-      nome: payload.name, ddiCelular: "+55", celular: payload.phone, email: "", cpf: "",
-      observacao: observation, tpOrigem: "Campanha", codOrigem: getServerConfig().originCode, codEstab: unit.code
-    } });
-    const leadCode = extractClientCode(lead);
-    if (!leadCode) throw new Error("Cadastro sem código.");
+    const observation = `${buildObservation({ ...payload, unit, objective, investment, workRoutine })} | Pagamento Asaas confirmado | Pedido: ${order.id} | Cobrança: ${order.payment_id}`;
+    let leadCode = eligibility.clients.find((client) => client.unitCode === unit.code)?.clientCode || eligibility.clients[0]?.clientCode;
+    if (!leadCode) {
+      reason = "lead-creation";
+      const lead = await belle("/cliente/gravar-lead", { method: "POST", body: {
+        nome: payload.name, ddiCelular: "+55", celular: payload.phone, email: "", cpf: "",
+        observacao: observation, tpOrigem: "Campanha", codOrigem: getServerConfig().originCode, codEstab: unit.code
+      } });
+      leadCode = extractClientCode(lead);
+      if (!leadCode) throw new Error("Cadastro sem código.");
+    }
     await store.update(order.id, { lead_code: leadCode }, ["processing"]);
     reason = "booking-response";
     const booking = await belle(BOOKING_ENDPOINT, { method: "POST", body: buildBookingBody({ leadCode, unit, objective, payload, observation }) });

@@ -3,6 +3,7 @@ import {
   PROMOTION,
   buildWhatsAppUrl,
   formatPhone,
+  getInvestment,
   getObjective,
   getUnit,
   getWorkRoutine,
@@ -17,8 +18,11 @@ assert.equal(formatPhone("84988307853"), "(84) 9 8830-7853");
 assert.equal(validateMobile("84988307853"), null);
 assert.match(validateMobile("8488307853"), /Faltam|Falta o 9/);
 assert.equal(getUnit(2).shortName, "Lagoa Nova");
-assert.equal(getObjective("facial").belleObservationCode, 2);
-assert.equal(getWorkRoutine("em-pe").label, "Trabalho em pé");
+assert.equal(getObjective("rosto").belleObservationCode, 2);
+assert.equal(getInvestment("800-1200").label, "R$ 800 a R$ 1.200");
+assert.equal(getWorkRoutine("trabalho-estudo").label, "Trabalho e estudo");
+assert.equal(getObjective("facial").belleObservationCode, 2, "Pending orders keep their legacy objective mapping");
+assert.equal(getWorkRoutine("sentado").label, "Trabalho sentado(a)", "Pending orders keep their legacy routine mapping");
 assert.equal(toBelleDate("2026-07-09"), "09/07/2026");
 assert.equal(PROMOTION.serviceCode, 22);
 assert.equal(PROMOTION.duration, 60);
@@ -28,8 +32,9 @@ assert.deepEqual(
     name: "  Maria da Silva  ",
     phone: "(84) 9 8830-7853",
     unidade: "Drenesse Petrópolis",
-    objetivo: "Corporal",
-    rotina: "Trabalho sentado(a)",
+    objetivo: "Flacidez",
+    investimento: "R$ 800 a R$ 1.200",
+    rotina: "Trabalho e estudo",
     horario: "09/07/2026 às 15:00"
   }),
   {
@@ -37,8 +42,9 @@ assert.deepEqual(
     name: "Maria da Silva",
     phone: "+5584988307853",
     unidade: "Drenesse Petrópolis",
-    objetivo: "Corporal",
-    rotina: "Trabalho sentado(a)",
+    objetivo: "Flacidez",
+    investimento: "R$ 800 a R$ 1.200",
+    rotina: "Trabalho e estudo",
     horario: "09/07/2026 às 15:00"
   }
 );
@@ -56,6 +62,7 @@ assert.deepEqual(Object.keys(trackingTarget.dataLayer[0]), [
   "phone",
   "unidade",
   "objetivo",
+  "investimento",
   "rotina",
   "horario"
 ]);
@@ -65,8 +72,9 @@ const url = buildWhatsAppUrl({
   name: "Maria",
   phone: "84988307853",
   unit: getUnit(1),
-  objective: getObjective("corporal"),
-  workRoutine: getWorkRoutine("sentado"),
+  objective: getObjective("flacidez"),
+  investment: getInvestment("800-1200"),
+  workRoutine: getWorkRoutine("trabalho-estudo"),
   slot: { date: "09/07/2026", time: "15:00" },
   bookingStatus: "confirmed",
   bookingCode: 123
@@ -74,7 +82,8 @@ const url = buildWhatsAppUrl({
 
 assert.ok(url.startsWith("https://wa.me/5584988307853?text="));
 assert.ok(decodeURIComponent(url).includes("Drenesse Petrópolis"));
-assert.ok(decodeURIComponent(url).includes("Trabalho sentado(a)"));
+assert.ok(decodeURIComponent(url).includes("Trabalho e estudo"));
+assert.ok(decodeURIComponent(url).includes("R$ 800 a R$ 1.200"));
 assert.ok(decodeURIComponent(url).includes("09/07/2026 às 15:00"));
 assert.ok(decodeURIComponent(url).includes("R$ 89,90"));
 assert.ok(decodeURIComponent(url).includes("DRENAGEM MÉTODO DRENESSE"));
@@ -83,8 +92,9 @@ const noAvailabilityUrl = buildWhatsAppUrl({
   number: "5584988307853",
   name: "Maria",
   unit: getUnit(1),
-  objective: getObjective("corporal"),
-  workRoutine: getWorkRoutine("sentado"),
+  objective: getObjective("flacidez"),
+  investment: getInvestment("800-1200"),
+  workRoutine: getWorkRoutine("trabalho-estudo"),
   reason: "no-availability",
   range: { startDate: "09/07/2026", endDate: "14/07/2026" }
 });
