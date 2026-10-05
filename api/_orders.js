@@ -1,13 +1,33 @@
 let pool;
 
+export function databaseConnectionString(value) {
+  const url = new URL(value);
+  // node-postgres 8 currently treats sslmode=require as verify-full. Supabase's
+  // shared pooler uses libpq's encrypted-without-CA-verification semantics for
+  // this mode, which pg enables explicitly with uselibpqcompat.
+  if (url.searchParams.get("sslmode") === "require" && !url.searchParams.has("uselibpqcompat")) {
+    url.searchParams.set("uselibpqcompat", "true");
+  }
+  return url.toString();
+}
+
 async function query(sql, params = []) {
   if (!process.env.DATABASE_URL) throw new Error("Banco de pedidos não configurado.");
   if (!pool) {
     const { default: pg } = await import("pg");
-    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
+    pool = new pg.Pool({ connectionString: databaseConnectionString(process.env.DATABASE_URL), max: 1, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
     pool.on("error", () => console.error("Conexão de pedidos interrompida."));
   }
-  return pool.query(sql, params);
+  try {
+    return await pool.query(sql, params);
+  } catch (error) {
+    // Log only diagnostic identifiers. Connection strings and credentials must never reach runtime logs.
+    console.error("Consulta ao banco de pedidos falhou.", {
+      code: typeof error?.code === "string" ? error.code : "unknown",
+      name: typeof error?.name === "string" ? error.name : "Error"
+    });
+    throw error;
+  }
 }
 
 export function createOrderStore(query) { return {

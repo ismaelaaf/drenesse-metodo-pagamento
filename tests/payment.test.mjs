@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { createOrderStore } from "../api/_orders.js";
+import { createOrderStore, databaseConnectionString } from "../api/_orders.js";
 import { checkoutUrl, tokenHash } from "../api/_asaas.js";
 import { createPaymentOrder, fulfillPaidOrder, handleCheckoutEvent, publicOrder } from "../api/_payment-flow.js";
 import { createWebhookHandler } from "../api/asaas-webhook.js";
@@ -15,6 +15,11 @@ await db.exec(await readFile(new URL("../db/001-payment-orders.sql", import.meta
 const store = createOrderStore((sql, params) => db.query(sql, params));
 const config = { environment: "sandbox", appUrl: "http://localhost:5173", checkoutOrigin: "https://sandbox.asaas.com" };
 const webhookToken = randomBytes(32).toString("hex");
+
+assert.equal(
+  new URL(databaseConnectionString("postgresql://postgres.test:secret@pooler.supabase.com:6543/postgres?sslmode=require")).searchParams.get("uselibpqcompat"),
+  "true"
+);
 
 function input() {
   return {
