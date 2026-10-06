@@ -96,6 +96,16 @@ try {
   const unconfigured = await request(createCheckoutHandler({ config: () => { throw new Error("Missing keys"); } }), payload);
   assert.equal(unconfigured.statusCode, 503);
 
+  const retryServices = mocks();
+  const retryPayload = input();
+  const successfulProvider = retryServices.provider;
+  const definitiveProviderError = Object.assign(new Error("Asaas rejected the request"), { definitive: true });
+  retryServices.provider = async () => { throw definitiveProviderError; };
+  await assert.rejects(createPaymentOrder(retryPayload, retryServices));
+  assert.equal((await store.get(retryPayload.orderId)).status, "setup_failed");
+  const retriedOrder = await createPaymentOrder(retryPayload, { ...retryServices, provider: successfulProvider });
+  assert.equal(retriedOrder.status, "pending", "A definitively failed checkout can be retried with the same order id");
+
   const event = paidEvent(pending);
   const webhook = createWebhookHandler({ token: () => webhookToken, processEvent: (value) => handleCheckoutEvent(value, services) });
   assert.equal((await request(webhook, event)).statusCode, 401);

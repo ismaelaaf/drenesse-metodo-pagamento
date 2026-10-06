@@ -30,7 +30,9 @@ export async function createPaymentOrder(input, { store = orderStore, provider =
     if (existingOrder.access_token_hash !== tokenHash(input.accessToken)) throw flowError("Pedido não encontrado.", 404);
     if (["pending", "confirmed", "paid", "processing", "needs_attention"].includes(existingOrder.status)) return existingOrder;
     if (existingOrder.status === "creating") throw flowError("Pedido em preparação. Tente novamente em alguns instantes.", 409);
-    throw flowError("Este pedido precisa ser verificado pelo atendimento antes de uma nova tentativa.", 409);
+    if (existingOrder.status !== "setup_failed") {
+      throw flowError("Este pedido precisa ser verificado pelo atendimento antes de uma nova tentativa.", 409);
+    }
   }
 
   const payload = {
@@ -43,7 +45,9 @@ export async function createPaymentOrder(input, { store = orderStore, provider =
   if (!eligibility.eligible) throw flowError("Este WhatsApp possui um atendimento nos últimos 30 dias e ainda não pode utilizar esta condição.", 403);
   if (!await availableSlot(payload, belle)) throw flowError("Este horário não está mais disponível. Escolha outra opção antes de pagar.", 409);
 
-  const order = await store.create({ id: input.orderId, access_token_hash: tokenHash(input.accessToken), payload, amount_cents: PROMOTION.promotionalPriceCents });
+  const order = existingOrder
+    ? await store.update(existingOrder.id, { status: "creating", attention_reason: null }, ["setup_failed"])
+    : await store.create({ id: input.orderId, access_token_hash: tokenHash(input.accessToken), payload, amount_cents: PROMOTION.promotionalPriceCents });
   if (!order) throw flowError("Pedido em preparação. Tente novamente em alguns instantes.", 409);
   try {
     const checkout = await provider("/checkouts", { method: "POST", body: buildCheckoutBody(order, config) });
