@@ -2,7 +2,7 @@ import { PROMOTION, getInvestment, getObjective, getUnit, getWorkRoutine, normal
 import { belleFetch, buildObservation, extractClientCode, flattenAvailability, getServerConfig, buildFallbackWhatsapp } from "./_belle.js";
 import { BOOKING_ENDPOINT, buildBookingBody, checkPhoneEligibility, validatePayload } from "./_booking.js";
 import { buildAvailabilityQuery } from "./availability.js";
-import { asaasFetch, buildCheckoutBody, checkoutUrl, tokenHash, verifyCheckoutPayment } from "./_asaas.js";
+import { asaasFetch, buildCheckoutBody, checkoutUrl, paymentConfig, tokenHash, verifyCheckoutPayment } from "./_asaas.js";
 import { orderStore } from "./_orders.js";
 
 export const ORDER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -110,7 +110,7 @@ export async function fulfillPaidOrder(order, { store = orderStore, belle = bell
   }
 }
 
-export async function handleCheckoutEvent(event, { store = orderStore, provider = asaasFetch, belle = belleFetch } = {}) {
+export async function handleCheckoutEvent(event, { store = orderStore, provider = asaasFetch, belle = belleFetch, config = paymentConfig() } = {}) {
   if (!event || typeof event !== "object") throw flowError("Evento inválido.", 400);
   const supported = ["CHECKOUT_PAID", "CHECKOUT_CANCELED", "CHECKOUT_EXPIRED"];
   if (!supported.includes(event.event)) return { ignored: true };
@@ -140,7 +140,12 @@ export async function handleCheckoutEvent(event, { store = orderStore, provider 
       }
       order = await store.update(order.id, { status: "paid", payment_id: payment.id, paid_at: new Date().toISOString() }, ["creating", "pending", "setup_unknown", "cancelled", "expired"]) || await store.get(order.id);
     }
-    order = await fulfillPaidOrder(order, { store, belle });
+    if (config.environment === "sandbox") {
+      // Sandbox payments validate Asaas and webhook integration, but must never write to the real Belle agenda.
+      order = await store.update(order.id, { status: "needs_attention", attention_reason: "sandbox-payment" }, ["paid"]) || await store.get(order.id);
+    } else {
+      order = await fulfillPaidOrder(order, { store, belle });
+    }
   } else if (!order.paid_at) {
     order = await store.update(order.id, { status: event.event === "CHECKOUT_EXPIRED" ? "expired" : "cancelled" }, ["creating", "pending", "setup_unknown"]) || await store.get(order.id);
   }
@@ -157,6 +162,7 @@ export function publicOrder(order) {
     orderId: order.id, status: order.status, paymentConfirmed: Boolean(order.paid_at),
     checkoutUrl: order.status === "pending" ? order.checkout_url : null,
     bookingCode: order.status === "confirmed" ? order.booking_code : null,
+    sandboxTest: order.attention_reason === "sandbox-payment",
     summary: { unit: getUnit(payload.unitCode)?.name, date: payload.slot.date, time: payload.slot.time },
     whatsappUrl: whatsapp.href
   };

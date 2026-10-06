@@ -13,7 +13,8 @@ import directBooking from "../api/submit-booking.js";
 const db = new PGlite();
 await db.exec(await readFile(new URL("../db/001-payment-orders.sql", import.meta.url), "utf8"));
 const store = createOrderStore((sql, params) => db.query(sql, params));
-const config = { environment: "sandbox", appUrl: "http://localhost:5173", checkoutOrigin: "https://sandbox.asaas.com" };
+const config = { environment: "production", appUrl: "https://drenesse.example", checkoutOrigin: "https://asaas.com" };
+const sandboxConfig = { environment: "sandbox", appUrl: "http://localhost:5173", checkoutOrigin: "https://sandbox.asaas.com" };
 const webhookToken = randomBytes(32).toString("hex");
 const fixedNow = new Date("2026-10-05T15:00:00Z");
 
@@ -32,7 +33,7 @@ function input() {
   };
 }
 
-function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, existing = false, recentAppointment = false, booking = { dis: true, codAgendamento: 888 }, bookingError = false } = {}) {
+function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, existing = false, recentAppointment = false, booking = { dis: true, codAgendamento: 888 }, bookingError = false, runtimeConfig = config } = {}) {
   const writes = [];
   const requests = [];
   async function belle(path, options) {
@@ -58,7 +59,7 @@ function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, e
     if (path.startsWith("/payments?checkoutSession=")) return { data: [{ id: `pay_${randomUUID()}`, status: paymentStatus, billingType: "PIX", value }] };
     throw new Error(`Unexpected Asaas path: ${path}`);
   }
-  return { store, belle, provider, writes, requests, config, now: () => fixedNow };
+  return { store, belle, provider, writes, requests, config: runtimeConfig, now: () => fixedNow };
 }
 
 function paidEvent(order, overrides = {}) {
@@ -142,6 +143,15 @@ try {
   assert.deepEqual(services.writes, ["/cliente/gravar-lead", "/agenda/gravar"], "Duplicate/late events cannot duplicate or undo the booking");
   const safe = publicOrder(fulfilled);
   assert.equal(safe.paymentConfirmed, true);
+
+  const sandboxServices = mocks({ runtimeConfig: sandboxConfig });
+  const sandboxOrder = await createPaymentOrder(input(), sandboxServices);
+  const sandboxResult = await handleCheckoutEvent(paidEvent(sandboxOrder), sandboxServices);
+  const storedSandboxOrder = await store.get(sandboxOrder.id);
+  assert.equal(sandboxResult.status, "needs_attention");
+  assert.equal(storedSandboxOrder.attention_reason, "sandbox-payment");
+  assert.deepEqual(sandboxServices.writes, [], "Sandbox payments cannot write clients or bookings to Belle");
+  assert.equal(publicOrder(storedSandboxOrder).sandboxTest, true);
   assert.equal(safe.checkoutUrl, null);
   assert.ok(!JSON.stringify(safe).includes(payload.accessToken));
   assert.ok(!JSON.stringify(safe).includes(tokenHash(payload.accessToken)));
