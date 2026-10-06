@@ -44,11 +44,14 @@ export default function PaymentStatus({ session, initialOrder, contactUrl }) {
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [checkStatus, session.accessToken]);
 
+  const sandboxTest = order?.sandboxTest === true;
   const confirmed = order?.status === "confirmed";
   const needsAttention = order?.status === "needs_attention";
   const unpaidEnd = ["cancelled", "expired", "setup_failed", "setup_unknown"].includes(order?.status);
-  const title = confirmed ? "Agendamento confirmado" : needsAttention ? (order.paymentConfirmed ? "Pagamento confirmado" : "Precisamos verificar seu pagamento") : unpaidEnd ? "Agendamento ainda não confirmado" : order?.paymentConfirmed ? "Confirmando seu agendamento" : "Aguardando confirmação do pagamento";
-  const message = confirmed
+  const title = sandboxTest ? "Pagamento de teste confirmado" : confirmed ? "Agendamento confirmado" : needsAttention ? (order.paymentConfirmed ? "Pagamento confirmado" : "Precisamos verificar seu pagamento") : unpaidEnd ? "Agendamento ainda não confirmado" : order?.paymentConfirmed ? "Confirmando seu agendamento" : "Aguardando confirmação do pagamento";
+  const message = sandboxTest
+    ? "O Sandbox do Asaas confirmou o pagamento. Nenhum agendamento foi criado no Belle."
+    : confirmed
     ? "Sua sessão do Método Drenesse foi registrada na agenda."
     : needsAttention
       ? order.paymentConfirmed
@@ -62,7 +65,7 @@ export default function PaymentStatus({ session, initialOrder, contactUrl }) {
 
   return (
     <section className="form-card form-card--success" aria-live="polite" data-testid="payment-status">
-      <div className="success-mark">{confirmed ? <Check aria-hidden="true" size={28} /> : <Loader2 aria-hidden="true" className={!unpaidEnd && !needsAttention ? "spin" : undefined} size={28} />}</div>
+      <div className="success-mark">{confirmed || sandboxTest ? <Check aria-hidden="true" size={28} /> : <Loader2 aria-hidden="true" className={!unpaidEnd && !needsAttention ? "spin" : undefined} size={28} />}</div>
       <h2>{title}</h2>
       <p>{message}</p>
       {order?.summary && <p><strong>{order.summary.unit}</strong><br />{formatLongDate(order.summary.date)} às {order.summary.time}</p>}
