@@ -1,4 +1,4 @@
-import { belleFetch, extractClientCode } from "./_belle.js";
+import { belleFetch, extractClientCode, isFixedHalfHourSlot } from "./_belle.js";
 import { PROMOTION, SELLER, UNITS, getInvestment, getObjective, getUnit, getWorkRoutine, normalizeBrazilianMobile, validateMobile } from "../src/lib/domain.js";
 
 export const BOOKING_ENDPOINT = "/agenda/gravar";
@@ -98,6 +98,6 @@ export function validatePayload(payload) {
   if (!getObjective(payload.objectiveId)) return "Objetivo inválido.";
   if (!getInvestment(payload.investmentId)) return "Investimento inválido.";
   if (!getWorkRoutine(payload.workRoutineId)) return "Rotina inválida.";
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(payload.slot?.date || "") || !/^([01]\d|2[0-3]):[0-5]\d$/.test(payload.slot?.time || "") || !/^\d{1,12}$/.test(String(payload.slot?.professionalCode || ""))) return "Horário inválido.";
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(payload.slot?.date || "") || !isFixedHalfHourSlot(payload.slot?.time) || !/^\d{1,12}$/.test(String(payload.slot?.professionalCode || ""))) return "Horário inválido.";
   return "";
 }

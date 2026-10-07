@@ -5,6 +5,7 @@ import {
   buildObservation
 } from "../api/_belle.js";
 import { BOOKING_ENDPOINT, buildBookingBody, checkPhoneEligibility, findExistingClientByPhone } from "../api/submit-booking.js";
+import { validatePayload } from "../api/_booking.js";
 import { PROMOTION, SELLER, getInvestment, getObjective, getUnit, getWorkRoutine } from "../src/lib/domain.js";
 
 const payload = {
@@ -23,6 +24,20 @@ const body = buildBookingBody({
   payload,
   observation: "Campanha de teste"
 });
+
+const validFormPayload = {
+  name: "Maria da Silva",
+  phone: "84999999999",
+  unitCode: 1,
+  objectiveId: "gordura-localizada",
+  investmentId: "300-800",
+  workRoutineId: "trabalho",
+  slot: payload.slot
+};
+assert.equal(validatePayload(validFormPayload), "");
+assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:00" } }), "");
+assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:15" } }), "Horário inválido.");
+assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:45" } }), "Horário inválido.");
 
 assert.equal(BOOKING_ENDPOINT, "/agenda/gravar");
 assert.equal(body.codCli, 1234);
