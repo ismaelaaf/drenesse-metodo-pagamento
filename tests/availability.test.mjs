@@ -23,7 +23,7 @@ assert.deepEqual(buildAvailabilityDates("30/12/2026"), [
   "04/01/2027"
 ]);
 
-function rawDay(date, time = "09:00") {
+function rawDay(date, times = ["09:00"]) {
   return {
     nome: "Dia disponível",
     data: date,
@@ -32,7 +32,7 @@ function rawDay(date, time = "09:00") {
       {
         codProf: 42,
         nome: "Profissional Teste",
-        horarios: [{ horario: time, bloq: "l", turno: "M" }]
+        horarios: times.map((time) => ({ horario: time, bloq: "l", turno: "M" }))
       }
     ]
   };
@@ -71,6 +71,14 @@ assert.equal(partial.startDate, "30/12/2026");
 assert.equal(partial.endDate, "04/01/2027");
 assert.equal(partial.days.length, 1);
 assert.equal(partial.days[0].slots.length, 1);
+
+const fixedTimes = await queryAvailabilityWindow({
+  startDate: "10/07/2026",
+  fetchDate: async (date) => date === "10/07/2026"
+    ? rawDay(date, ["09:00", "09:15", "09:30", "09:45"])
+    : []
+});
+assert.deepEqual(fixedTimes.days[0].slots.map((slot) => slot.time), ["09:00", "09:30"]);
 
 const empty = await queryAvailabilityWindow({
   startDate: "09/07/2026",
