@@ -30,14 +30,14 @@ export const UNITS = [
 ];
 
 export const PROMOTION = Object.freeze({
-  serviceCode: 22,
+  serviceCode: 56260425,
   serviceName: "DRENAGEM MÉTODO DRENESSE",
-  serviceLabel: "22 - DRENAGEM MÉTODO DRENESSE",
+  serviceLabel: "56260425 - DRENAGEM MÉTODO DRENESSE",
   duration: 60,
   regularPrice: "R$ 159,90",
-  promotionalPrice: "R$ 89,90",
-  promotionalPriceCents: 8990,
-  campaignLabel: "Campanha de R$ 159,90 por R$ 89,90"
+  promotionalPrice: "R$ 98,70",
+  promotionalPriceCents: 9870,
+  campaignLabel: "Campanha de R$ 159,90 por R$ 98,70"
 });
 
 export const SELLER = Object.freeze({

@@ -33,7 +33,7 @@ function input() {
   };
 }
 
-function mocks({ available = true, paymentStatus = "CONFIRMED", value = 89.90, existing = false, recentAppointment = false, booking = { dis: true, codAgendamento: 888 }, bookingError = false, runtimeConfig = config } = {}) {
+function mocks({ available = true, paymentStatus = "CONFIRMED", value = 98.70, existing = false, recentAppointment = false, booking = { dis: true, codAgendamento: 888 }, bookingError = false, runtimeConfig = config } = {}) {
   const writes = [];
   const requests = [];
   async function belle(path, options) {
@@ -77,13 +77,13 @@ try {
   const services = mocks();
   const pending = await createPaymentOrder(payload, services);
   assert.equal(pending.status, "pending");
-  assert.equal(pending.amount_cents, 8990);
+  assert.equal(pending.amount_cents, 9870);
   assert.equal(pending.paid_at, null);
   assert.equal(pending.payload.paid_at, undefined);
   assert.deepEqual(services.writes, [], "No Belle writes before payment");
   const checkout = services.requests[0].body;
   assert.deepEqual(checkout.billingTypes, ["PIX", "CREDIT_CARD"]);
-  assert.equal(checkout.items[0].value, 89.90);
+  assert.equal(checkout.items[0].value, 98.70);
   assert.equal(checkout.externalReference, pending.id);
   assert.ok(!checkout.callback.successUrl.includes(payload.accessToken), "Do not send access tokens to analytics or callback URLs");
   assert.equal((await createPaymentOrder(payload, services)).checkout_id, pending.checkout_id);

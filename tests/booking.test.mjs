@@ -49,7 +49,7 @@ assert.equal(body.serv.length, 1);
 assert.equal(body.serv[0].codServico, PROMOTION.serviceCode);
 assert.equal(body.serv[0].nome, "DRENAGEM MÉTODO DRENESSE");
 assert.equal(body.serv[0].tempo, 60);
-assert.equal(body.serv[0].label, "22 - DRENAGEM MÉTODO DRENESSE");
+assert.equal(body.serv[0].label, "56260425 - DRENAGEM MÉTODO DRENESSE");
 assert.ok(!("tipoConsulta" in body));
 assert.ok(!("tempo" in body));
 
@@ -63,9 +63,9 @@ const observation = buildObservation({
   slot: payload.slot,
   tracking: { utm_source: "teste", utm_campaign: "metodo-drenesse" }
 });
-assert.match(observation, /Serviço: 22 - DRENAGEM MÉTODO DRENESSE/);
+assert.match(observation, /Serviço: 56260425 - DRENAGEM MÉTODO DRENESSE/);
 assert.match(observation, /Duração: 60 minutos/);
-assert.match(observation, /Campanha: de R\$ 159,90 por R\$ 89,90/);
+assert.match(observation, /Campanha: de R\$ 159,90 por R\$ 98,70/);
 assert.match(observation, /Principal incômodo: Gordura localizada/);
 assert.match(observation, /Investimento mensal: R\$ 300 a R\$ 800/);
 assert.match(observation, /Rotina: Trabalho/);
