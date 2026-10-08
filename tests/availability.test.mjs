@@ -72,13 +72,13 @@ assert.equal(partial.endDate, "04/01/2027");
 assert.equal(partial.days.length, 1);
 assert.equal(partial.days[0].slots.length, 1);
 
-const fixedTimes = await queryAvailabilityWindow({
+const wholeHourTimes = await queryAvailabilityWindow({
   startDate: "10/07/2026",
   fetchDate: async (date) => date === "10/07/2026"
     ? rawDay(date, ["09:00", "09:15", "09:30", "09:45"])
     : []
 });
-assert.deepEqual(fixedTimes.days[0].slots.map((slot) => slot.time), ["09:00", "09:30"]);
+assert.deepEqual(wholeHourTimes.days[0].slots.map((slot) => slot.time), ["09:00"]);
 
 const empty = await queryAvailabilityWindow({
   startDate: "09/07/2026",

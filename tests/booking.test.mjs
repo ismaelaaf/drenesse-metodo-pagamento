@@ -11,7 +11,7 @@ import { PROMOTION, SELLER, getInvestment, getObjective, getUnit, getWorkRoutine
 const payload = {
   slot: {
     date: "10/07/2026",
-    time: "14:30",
+    time: "14:00",
     professionalCode: "42",
     professionalName: "Profissional Teste"
   }
@@ -37,6 +37,7 @@ const validFormPayload = {
 assert.equal(validatePayload(validFormPayload), "");
 assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:00" } }), "");
 assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:15" } }), "Horário inválido.");
+assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:30" } }), "Horário inválido.");
 assert.equal(validatePayload({ ...validFormPayload, slot: { ...payload.slot, time: "14:45" } }), "Horário inválido.");
 
 assert.equal(BOOKING_ENDPOINT, "/agenda/gravar");

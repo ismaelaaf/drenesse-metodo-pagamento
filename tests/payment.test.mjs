@@ -27,7 +27,7 @@ function input() {
   return {
     orderId: randomUUID(), accessToken: randomBytes(32).toString("hex"),
     name: "Maria Teste", phone: "84999999999", unitCode: 1, objectiveId: "gordura-localizada", investmentId: "300-800", workRoutineId: "trabalho",
-    slot: { date: "09/10/2026", time: "14:30", professionalCode: "42", professionalName: "Profissional Teste" },
+    slot: { date: "09/10/2026", time: "14:00", professionalCode: "42", professionalName: "Profissional Teste" },
     // The caller cannot set the price or payment/booking status.
     amount_cents: 1, paid_at: new Date().toISOString(), bookingStatus: "confirmed"
   };
@@ -44,7 +44,7 @@ function mocks({ available = true, paymentStatus = "CONFIRMED", value = 98.70, e
       dtAgenda: "20/09/2026",
       cliente: { cod: "456", celular: "(84) 9 9999-9999" }
     }] : [];
-    if (path === "/agenda/disponibilidade") return [{ data: "09/10/2026", horarios: [{ codProf: "42", nome: "Profissional Teste", horarios: available ? [{ horario: "14:30", cod: "l" }] : [] }] }];
+    if (path === "/agenda/disponibilidade") return [{ data: "09/10/2026", horarios: [{ codProf: "42", nome: "Profissional Teste", horarios: available ? [{ horario: "14:00", cod: "l" }] : [] }] }];
     if (path === "/cliente/gravar-lead") return { codigo: 1234 };
     if (path === "/agenda/gravar") {
       assert.match(options.body.observacao, /Pagamento Asaas confirmado/);
