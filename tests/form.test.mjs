@@ -24,7 +24,7 @@ assert.equal(getWorkRoutine("trabalho-estudo").label, "Trabalho e estudo");
 assert.equal(getObjective("facial").belleObservationCode, 2, "Pending orders keep their legacy objective mapping");
 assert.equal(getWorkRoutine("sentado").label, "Trabalho sentado(a)", "Pending orders keep their legacy routine mapping");
 assert.equal(toBelleDate("2026-07-09"), "09/07/2026");
-assert.equal(PROMOTION.serviceCode, 22);
+assert.equal(PROMOTION.serviceCode, 56260425);
 assert.equal(PROMOTION.duration, 60);
 
 assert.deepEqual(
@@ -85,7 +85,7 @@ assert.ok(decodeURIComponent(url).includes("Drenesse Petrópolis"));
 assert.ok(decodeURIComponent(url).includes("Trabalho e estudo"));
 assert.ok(decodeURIComponent(url).includes("R$ 800 a R$ 1.200"));
 assert.ok(decodeURIComponent(url).includes("09/07/2026 às 15:00"));
-assert.ok(decodeURIComponent(url).includes("R$ 89,90"));
+assert.ok(decodeURIComponent(url).includes("R$ 98,70"));
 assert.ok(decodeURIComponent(url).includes("DRENAGEM MÉTODO DRENESSE"));
 
 const noAvailabilityUrl = buildWhatsAppUrl({
