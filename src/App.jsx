@@ -315,7 +315,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [paymentSession, setPaymentSession] = useState(returnPaymentSession);
   const paymentRequestRef = useRef(null);
-  const capturedLeadKeysRef = useRef(new Set());
+  const leverCaptureRef = useRef(null);
+  const leverDetailsRef = useRef(new Map());
   const trackedLeadKeysRef = useRef(new Set());
 
   const selectedUnit = useMemo(() => getUnit(form.unitCode), [form.unitCode]);
@@ -398,6 +399,59 @@ export default function App() {
     return "";
   }
 
+  function ensureLeverCard() {
+    const phone = normalizeBrazilianMobile(form.phone);
+    const captureKey = `${phone}|${form.name.trim()}`;
+    if (leverCaptureRef.current?.key === captureKey) return leverCaptureRef.current.promise;
+
+    const promise = fetch("/api/capture-lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.name.trim(), phone }),
+      keepalive: true
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.cardId) throw new Error(data.message || "Não foi possível registrar o contato no painel.");
+      return data;
+    });
+
+    leverCaptureRef.current = { key: captureKey, promise };
+    promise.catch(() => {
+      if (leverCaptureRef.current?.promise === promise) leverCaptureRef.current = null;
+    });
+    return promise;
+  }
+
+  function syncLeverDetails() {
+    const phone = normalizeBrazilianMobile(form.phone);
+    const detailsKey = [phone, form.unitCode, form.objectiveId, form.investmentId].join("|");
+    if (leverDetailsRef.current.has(detailsKey)) return leverDetailsRef.current.get(detailsKey);
+
+    const promise = ensureLeverCard()
+      .then(async ({ cardId }) => {
+        const response = await fetch("/api/capture-lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cardId,
+            name: form.name.trim(),
+            phone,
+            unitCode: Number(form.unitCode),
+            objectiveId: form.objectiveId,
+            investmentId: form.investmentId
+          }),
+          keepalive: true
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || "Não foi possível atualizar o card no painel.");
+        }
+      });
+    leverDetailsRef.current.set(detailsKey, promise);
+    promise.catch(() => leverDetailsRef.current.delete(detailsKey));
+    return promise;
+  }
+
   function nextStep() {
     const validation = validateStep();
     if (validation) {
@@ -406,22 +460,9 @@ export default function App() {
     }
     setError("");
     if (step === 0) {
-      const phone = normalizeBrazilianMobile(form.phone);
-      const captureKey = phone;
-      if (!capturedLeadKeysRef.current.has(captureKey)) {
-        capturedLeadKeysRef.current.add(captureKey);
-        fetch("/api/capture-lead", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: form.name.trim(), phone }),
-          keepalive: true
-        })
-          .then((response) => {
-            if (!response.ok) capturedLeadKeysRef.current.delete(captureKey);
-          })
-          .catch(() => capturedLeadKeysRef.current.delete(captureKey));
-      }
+      ensureLeverCard().catch(() => {});
     }
+    if (step === 3) syncLeverDetails().catch(() => {});
     setStep((current) => Math.min(current + 1, FORM_STEPS.length - 1));
   }
 
@@ -444,6 +485,7 @@ export default function App() {
 
     setSubmitState("loading");
     setError("");
+    await syncLeverDetails().catch(() => {});
 
     const payload = {
       name: form.name.trim(),

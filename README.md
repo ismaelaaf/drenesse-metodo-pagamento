@@ -4,7 +4,7 @@ Cópia independente de `ismaelaaf/drenesse-metodo`. Mantém o formulário React 
 
 ## Fluxo
 
-1. O visitante informa nome, WhatsApp, unidade, objetivo, rotina e horário, como na LP original.
+1. O visitante informa nome, WhatsApp, unidade, objetivo, rotina e horário, como na LP original. O card criado no Lever recebe a data de entrada e, após as escolhas, o valor atribuído, a unidade e o principal incômodo.
 2. `/api/create-checkout` verifica elegibilidade e disponibilidade, salva o pedido no PostgreSQL e cria um Checkout Asaas avulso de R$ 98,70, com Pix e cartão à vista. O checkout expira em 10 minutos.
 3. O Asaas coleta os dados adicionais necessários ao pagamento em sua página hospedada. Os campos da LP permanecem iguais aos da versão original.
 4. O webhook autenticado `CHECKOUT_PAID` identifica o pedido e consulta a cobrança do checkout no Asaas. Só aceita `CONFIRMED` ou `RECEIVED`, com o valor integral da campanha.
