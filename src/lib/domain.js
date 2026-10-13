@@ -92,8 +92,8 @@ export const OBJECTIVES = [
 
 export const INVESTMENT_RANGES = [
   { id: "300", title: "R$ 300", label: "R$ 300", monetaryAmount: 300 },
-  { id: "300-800", title: "R$ 300 a R$ 800", label: "R$ 300 a R$ 800", monetaryAmount: 300 },
-  { id: "800-1200", title: "R$ 800 a R$ 1.200", label: "R$ 800 a R$ 1.200", monetaryAmount: 800 },
+  { id: "300-800", title: "R$ 300 a R$ 800", label: "R$ 300 a R$ 800", monetaryAmount: 650 },
+  { id: "800-1200", title: "R$ 800 a R$ 1.200", label: "R$ 800 a R$ 1.200", monetaryAmount: 1000 },
   { id: "acima-1200", title: "Acima de R$ 1.200", label: "Acima de R$ 1.200", monetaryAmount: 1200 },
   { id: "nao-sei", title: "Não sei informar ainda", label: "Não sei informar ainda", monetaryAmount: null }
 ];

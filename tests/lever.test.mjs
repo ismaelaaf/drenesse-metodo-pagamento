@@ -76,7 +76,7 @@ assert.deepEqual(
   {
     fields: ["Description", "MonetaryAmount", "CustomFields"],
     description: "WhatsApp: +55 (84) 9 8830-7853\nOrigem: Landing Método Drenesse\nUnidade: Drenesse Lagoa Nova\nPrincipal incômodo: Flacidez\nInvestimento mensal: R$ 300 a R$ 800",
-    monetaryAmount: 300,
+    monetaryAmount: 650,
     customFields: { field_unit: "unit-lagoa-nova" }
   }
 );
@@ -264,7 +264,7 @@ assert.throws(
 
   assert.equal(result.card.id, cardId);
   assert.deepEqual(updateRequest.fields, ["Description", "MonetaryAmount", "CustomFields"]);
-  assert.equal(updateRequest.monetaryAmount, 300);
+  assert.equal(updateRequest.monetaryAmount, 650);
   assert.deepEqual(updateRequest.customFields, {
     field_unit: "unit-lagoa-nova",
     field_entry_date: "2026-10-13",
