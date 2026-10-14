@@ -11,6 +11,12 @@ import {
 const DEFAULT_BASE_URL = "https://api.app.leverconversas.com.br";
 const DEFAULT_PANEL_ID = "a3ee4cf3-291f-4c8f-8535-e3414642951a";
 const DEFAULT_STEP_ID = "44586803-6791-41fd-b95a-826902688a25";
+// Resgatar, Falhou e Lead frio: o lead que volta pela landing nessas fases recomeça o funil.
+const DEFAULT_RESTART_STEP_IDS = Object.freeze([
+  "ecfd754a-e880-4da1-8bac-ef8a14305a6b",
+  "80189b0b-29b8-4169-9730-cad75b08dfed",
+  "8455a328-8af7-41f5-923e-0167533753c3"
+]);
 const LANDING_SOURCE = "Landing Método Drenesse";
 const CARD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CUSTOM_FIELD_NAMES = Object.freeze({
@@ -20,11 +26,17 @@ const CUSTOM_FIELD_NAMES = Object.freeze({
 });
 
 export function getLeverConfig() {
+  const stepId = process.env.LEVER_STEP_ID || DEFAULT_STEP_ID;
+  const restartStepIds = String(process.env.LEVER_RESTART_STEP_IDS || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
   return {
     token: process.env.LEVER_API_TOKEN || "",
     baseUrl: (process.env.LEVER_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, ""),
     panelId: process.env.LEVER_PANEL_ID || DEFAULT_PANEL_ID,
-    stepId: process.env.LEVER_STEP_ID || DEFAULT_STEP_ID
+    stepId,
+    restartStepIds: restartStepIds.length ? restartStepIds : [...DEFAULT_RESTART_STEP_IDS]
   };
 }
 
@@ -75,6 +87,17 @@ function brazilDate(value) {
   }).formatToParts(value);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function brazilDateTime(value) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(value);
 }
 
 function customFieldValue(field, candidates, now) {
@@ -327,16 +350,96 @@ export async function updateLeverCard(
   return getResponseEntity(payload);
 }
 
+export async function findLeverCardByContact(
+  contactId,
+  { config = getLeverConfig(), fetcher = fetch } = {}
+) {
+  const params = new URLSearchParams({
+    panelId: config.panelId,
+    contactId: String(contactId),
+    pageNumber: "1",
+    pageSize: "50"
+  });
+  const payload = await requestLeverJson(`${config.baseUrl}/crm/v1/panel/card?${params}`, {
+    config,
+    fetcher
+  });
+  // A API ignora filtros desconhecidos, então só vale card ativo deste painel vinculado a este contato.
+  const cards = getResponseList(payload).filter((card) =>
+    card?.id
+    && !card.archived
+    && String(card.panelId || config.panelId) === String(config.panelId)
+    && Array.isArray(card.contactIds)
+    && card.contactIds.some((id) => String(id) === String(contactId))
+  );
+  cards.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  return cards[0] || null;
+}
+
+export async function reopenLeverCard(
+  card,
+  { config = getLeverConfig(), fetcher = fetch, now = () => new Date() } = {}
+) {
+  const cardUrl = `${config.baseUrl}/crm/v1/panel/card/${encodeURIComponent(card.id)}`;
+  const restartStepIds = config.restartStepIds || [];
+  const restart = restartStepIds.includes(String(card.stepId)) && String(card.stepId) !== String(config.stepId);
+  let moved = false;
+
+  if (restart) {
+    try {
+      await requestLeverJson(cardUrl, {
+        method: "PUT",
+        body: { fields: ["StepId"], stepId: config.stepId },
+        config,
+        fetcher
+      });
+      moved = true;
+    } catch (error) {
+      console.error("Não foi possível voltar o card da Lever para o início do funil.", error);
+    }
+  }
+
+  try {
+    await requestLeverJson(`${cardUrl}/note`, {
+      method: "POST",
+      body: {
+        text: `Lead voltou pela landing em ${brazilDateTime(now())}. `
+          + (moved ? "O card voltou para o início do funil." : "O card continuou na fase em que estava.")
+      },
+      config,
+      fetcher,
+      retries: 0
+    });
+  } catch (error) {
+    console.error("Não foi possível anotar a volta do lead no card da Lever.", error);
+  }
+
+  return { ...card, stepId: moved ? config.stepId : card.stepId };
+}
+
 export async function captureLeverLead(
   lead,
   { config = getLeverConfig(), fetcher = fetch, now = () => new Date() } = {}
 ) {
   const contact = await ensureLeverContact(lead, { config, fetcher });
+
+  // Um card por cliente: quem volta pela landing reaproveita o card que já tem no painel.
+  let existingCard = null;
+  try {
+    existingCard = await findLeverCardByContact(contact.id, { config, fetcher });
+  } catch (error) {
+    console.error("Não foi possível procurar o card do contato na Lever; um card novo será criado.", error);
+  }
+  if (existingCard) {
+    const card = await reopenLeverCard(existingCard, { config, fetcher, now });
+    return { contact, card, reused: true };
+  }
+
   const card = await createLeverCard(
     { ...lead, contactId: contact.id },
     { config, fetcher, now }
   );
-  return { contact, card };
+  return { contact, card, reused: false };
 }
 
 export async function captureLeverDetails(
