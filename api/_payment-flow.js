@@ -4,6 +4,27 @@ import { BOOKING_ENDPOINT, buildBookingBody, checkPhoneEligibility, validatePayl
 import { buildAvailabilityQuery } from "./availability.js";
 import { asaasFetch, buildCheckoutBody, checkoutUrl, paymentConfig, tokenHash, verifyCheckoutPayment } from "./_asaas.js";
 import { orderStore } from "./_orders.js";
+import { isLeverCardId, moveLeverCardToScheduled } from "./capture-lead.js";
+
+const LEVER_SCHEDULE_TIMEOUT_MS = 8000;
+
+// Falha na Lever não pode mudar o status do pedido nem atrasar a conciliação: só registra no log.
+export async function markLeverCardScheduled(payload, unit, move = moveLeverCardToScheduled, timeoutMs = LEVER_SCHEDULE_TIMEOUT_MS) {
+  if (!isLeverCardId(payload?.cardId)) return false;
+  let timer;
+  try {
+    await Promise.race([
+      move({ cardId: payload.cardId, phone: payload.phone, slot: payload.slot, unit }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Tempo esgotado na Lever.")), timeoutMs); })
+    ]);
+    return true;
+  } catch (error) {
+    console.error("Não foi possível mover o card da Lever para Agendado.", error?.message || error);
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export const ORDER_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const ACCESS_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
@@ -39,6 +60,7 @@ export async function createPaymentOrder(input, { store = orderStore, provider =
     name: String(input.name).trim().slice(0, 150), phone: normalizeBrazilianMobile(input.phone),
     unitCode: Number(input.unitCode), objectiveId: input.objectiveId, investmentId: input.investmentId, workRoutineId: input.workRoutineId,
     slot: { date: input.slot.date, time: input.slot.time, professionalCode: String(input.slot.professionalCode), professionalName: String(input.slot.professionalName || "Profissional Drenesse").slice(0, 100) },
+    cardId: isLeverCardId(input.cardId) ? String(input.cardId) : "",
     tracking: Object.fromEntries(["page", "referrer", "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, String(input.tracking?.[key] || "").slice(0, 500)]))
   };
   const eligibility = await checkPhoneEligibility(payload.phone, payload.unitCode, { fetcher: belle, now });
@@ -61,7 +83,7 @@ export async function createPaymentOrder(input, { store = orderStore, provider =
   }
 }
 
-export async function fulfillPaidOrder(order, { store = orderStore, belle = belleFetch, now = () => new Date() } = {}) {
+export async function fulfillPaidOrder(order, { store = orderStore, belle = belleFetch, lever = moveLeverCardToScheduled, now = () => new Date() } = {}) {
   if (order.status === "processing") {
     if (now().getTime() - new Date(order.processing_at).getTime() < 180000) throw flowError("Agendamento em processamento.");
     // A previous invocation may have reached Belle before it was interrupted. Never blindly repeat it.
@@ -104,17 +126,19 @@ export async function fulfillPaidOrder(order, { store = orderStore, belle = bell
     reason = "booking-response";
     const booking = await belle(BOOKING_ENDPOINT, { method: "POST", body: buildBookingBody({ leadCode, unit, objective, payload, observation }) });
     const confirmed = booking?.dis === true || booking?.dis === 1 || booking?.dis === "1" || booking?.dis === "true";
-    return await store.update(order.id, {
+    const updated = await store.update(order.id, {
       status: confirmed ? "confirmed" : "needs_attention", booking_code: String(booking?.codAgendamento || booking?.codigo || ""),
       attention_reason: confirmed ? null : "booking-rejected"
     }, ["processing"]);
+    if (confirmed) await markLeverCardScheduled(payload, unit, lever);
+    return updated;
   } catch {
     // Writes to Belle are not safely repeatable after timeouts. Keep the paid order for human reconciliation.
     return await store.update(order.id, { status: "needs_attention", attention_reason: reason }, ["processing"]);
   }
 }
 
-export async function handleCheckoutEvent(event, { store = orderStore, provider = asaasFetch, belle = belleFetch, config = paymentConfig() } = {}) {
+export async function handleCheckoutEvent(event, { store = orderStore, provider = asaasFetch, belle = belleFetch, lever = moveLeverCardToScheduled, config = paymentConfig() } = {}) {
   if (!event || typeof event !== "object") throw flowError("Evento inválido.", 400);
   const supported = ["CHECKOUT_PAID", "CHECKOUT_CANCELED", "CHECKOUT_EXPIRED"];
   if (!supported.includes(event.event)) return { ignored: true };
@@ -148,7 +172,7 @@ export async function handleCheckoutEvent(event, { store = orderStore, provider 
       // Sandbox payments validate Asaas and webhook integration, but must never write to the real Belle agenda.
       order = await store.update(order.id, { status: "needs_attention", attention_reason: "sandbox-payment" }, ["paid"]) || await store.get(order.id);
     } else {
-      order = await fulfillPaidOrder(order, { store, belle });
+      order = await fulfillPaidOrder(order, { store, belle, lever });
     }
   } else if (!order.paid_at) {
     order = await store.update(order.id, { status: event.event === "CHECKOUT_EXPIRED" ? "expired" : "cancelled" }, ["creating", "pending", "setup_unknown"]) || await store.get(order.id);

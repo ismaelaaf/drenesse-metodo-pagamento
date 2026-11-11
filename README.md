@@ -8,7 +8,7 @@ Cópia independente de `ismaelaaf/drenesse-metodo`. Mantém o formulário React 
 2. `/api/create-checkout` verifica elegibilidade e disponibilidade, salva o pedido no PostgreSQL e cria um Checkout Asaas avulso de R$ 98,70, com Pix e cartão à vista. O checkout expira em 10 minutos.
 3. O Asaas coleta os dados adicionais necessários ao pagamento em sua página hospedada. Os campos da LP permanecem iguais aos da versão original.
 4. O webhook autenticado `CHECKOUT_PAID` identifica o pedido e consulta a cobrança do checkout no Asaas. Só aceita `CONFIRMED` ou `RECEIVED`, com o valor integral da campanha.
-5. Depois da confirmação, confere novamente o horário e a elegibilidade, cria o cadastro Belle e envia `/agenda/gravar` uma única vez por pedido.
+5. Depois da confirmação, confere novamente o horário e a elegibilidade, cria o cadastro Belle e envia `/agenda/gravar` uma única vez por pedido. Com a sessão confirmada, anota o horário no card da Lever e o move para a etapa `Agendado` (mesma regra da LP Stimulus Sculp). Falha na Lever só vai para o log e não altera o pedido.
 6. A página de retorno consulta o pedido salvo e mostra o resultado. O retorno do navegador jamais confirma pagamento nem cria agendamento. O webhook funciona mesmo com a página fechada.
 
 O endpoint antigo `/api/submit-booking` retorna HTTP 402 e não grava mais na Belle nesta LP.

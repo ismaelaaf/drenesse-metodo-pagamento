@@ -5,8 +5,10 @@ import {
   buildLeverCustomFields,
   buildLeverContactPayload,
   captureLeverDetails,
+  buildLeverScheduledPayload,
   captureLeverLead,
-  createLeverCard
+  createLeverCard,
+  moveLeverCardToScheduled
 } from "../api/capture-lead.js";
 import { getInvestment, getObjective, getUnit } from "../src/lib/domain.js";
 
@@ -14,8 +16,51 @@ const config = {
   token: "test-token",
   baseUrl: "https://api.app.leverconversas.com.br",
   panelId: "a3ee4cf3-291f-4c8f-8535-e3414642951a",
-  stepId: "44586803-6791-41fd-b95a-826902688a25"
+  stepId: "44586803-6791-41fd-b95a-826902688a25",
+  scheduledStepId: "4706f31a-feb2-4726-aea7-e0eaf57c7125"
 };
+
+{
+  const cardId = "0d6f1a8e-3b2c-4d5e-8f70-1a2b3c4d5e6f";
+  const details = { cardId, phone: "84988307853", slot: { date: "09/10/2026", time: "14:00" }, unit: { name: "Drenesse Petrópolis" } };
+  const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  const fetcherFor = (calls, card) => async (url, request) => {
+    calls.push({ url, method: request.method, body: request.body ? JSON.parse(request.body) : undefined });
+    if (url.endsWith("/core/v1/contact/filter")) return json({ items: [{ id: "contact-123", phoneNumber: "+55|84988307853" }] });
+    if (url.endsWith(`/crm/v2/panel/card/${cardId}`)) return json(card);
+    if (url.endsWith(`/crm/v3/panel/card/${cardId}`)) return json({ id: cardId });
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  assert.deepEqual(buildLeverScheduledPayload({ description: "Origem: Landing Método Drenesse", ...details }, config), {
+    fields: ["Description", "StepId"],
+    description: "Origem: Landing Método Drenesse\nAgendado: 09/10/2026 14:00 - Drenesse Petrópolis",
+    stepId: config.scheduledStepId
+  });
+  assert.equal(
+    buildLeverScheduledPayload({ description: "Origem: X\nAgendado: 09/10/2026 14:00 - Drenesse Petrópolis", ...details }, config).description,
+    "Origem: X\nAgendado: 09/10/2026 14:00 - Drenesse Petrópolis",
+    "A retry does not duplicate the scheduled line"
+  );
+
+  const calls = [];
+  await moveLeverCardToScheduled(details, {
+    config,
+    fetcher: fetcherFor(calls, { id: cardId, panelId: config.panelId, contactIds: ["contact-123"], description: "Origem: Landing Método Drenesse" })
+  });
+  const update = calls.find((call) => call.method === "PUT");
+  assert.equal(update.url, `${config.baseUrl}/crm/v3/panel/card/${cardId}`);
+  assert.equal(update.body.stepId, config.scheduledStepId);
+
+  for (const card of [
+    { id: cardId, panelId: "929d58b8-2650-4993-9deb-b7aaa6481b3b", contactIds: ["contact-123"] },
+    { id: cardId, panelId: config.panelId, contactIds: ["other-contact"] }
+  ]) {
+    const rejectedCalls = [];
+    await assert.rejects(moveLeverCardToScheduled(details, { config, fetcher: fetcherFor(rejectedCalls, card) }), /não pertence a este contato e painel/);
+    assert.equal(rejectedCalls.some((call) => call.method === "PUT"), false);
+  }
+}
 
 const lead = { name: " Maria da Silva ", phone: "+55 (84) 9 8830-7853" };
 const customFields = [
