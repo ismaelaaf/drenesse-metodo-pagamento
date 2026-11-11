@@ -210,6 +210,39 @@ try {
   assert.equal(returningResult.status, "confirmed", "An existing client without an appointment in 30 days is eligible");
   assert.deepEqual(returningServices.writes, ["/agenda/gravar"], "The existing Belle client is reused instead of duplicated");
 
+  // Lever: o card criado na LP vai com o pedido e só é movido para "Agendado" depois da sessão confirmada.
+  const leverCardId = "0d6f1a8e-3b2c-4d5e-8f70-1a2b3c4d5e6f";
+  const leverMoves = [];
+  const leverServices = { ...mocks(), lever: async (details) => { leverMoves.push(details); } };
+  const leverOrder = await createPaymentOrder({ ...input(), cardId: leverCardId }, leverServices);
+  assert.equal(leverOrder.payload.cardId, leverCardId);
+  assert.deepEqual(leverMoves, [], "The card is not moved before payment");
+  assert.equal((await handleCheckoutEvent(paidEvent(leverOrder), leverServices)).status, "confirmed");
+  assert.equal(leverMoves.length, 1);
+  assert.equal(leverMoves[0].cardId, leverCardId);
+  assert.equal(leverMoves[0].phone, "84999999999");
+  assert.equal(leverMoves[0].unit.code, 1);
+  assert.deepEqual(leverMoves[0].slot, leverOrder.payload.slot);
+
+  const rejectedLeverMoves = [];
+  const rejectedLeverOrder = await createPaymentOrder({ ...input(), cardId: leverCardId }, mocks());
+  await handleCheckoutEvent(paidEvent(rejectedLeverOrder), { ...mocks({ booking: { dis: "false" } }), lever: async (details) => { rejectedLeverMoves.push(details); } });
+  assert.equal((await store.get(rejectedLeverOrder.id)).status, "needs_attention");
+  assert.deepEqual(rejectedLeverMoves, [], "A rejected booking does not move the card");
+
+  const failingLever = { ...mocks(), lever: async () => { throw new Error("Lever fora do ar"); } };
+  const failingLeverOrder = await createPaymentOrder({ ...input(), cardId: leverCardId }, failingLever);
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await handleCheckoutEvent(paidEvent(failingLeverOrder), failingLever)).status, "confirmed", "A Lever failure does not change the order");
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  const invalidCardOrder = await createPaymentOrder({ ...input(), cardId: "<script>" }, mocks());
+  assert.equal(invalidCardOrder.payload.cardId, "", "Only card UUIDs are stored with the order");
+
   await assert.rejects(createPaymentOrder(input(), mocks({ existing: true, recentAppointment: true })), { statusCode: 403 });
 
   const eligibilityChangedOrder = await createPaymentOrder(input(), mocks({ existing: true }));

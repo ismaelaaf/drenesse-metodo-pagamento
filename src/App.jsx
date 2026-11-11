@@ -486,6 +486,8 @@ export default function App() {
     setSubmitState("loading");
     setError("");
     await syncLeverDetails().catch(() => {});
+    // Card já criado no primeiro passo: vai junto com o pedido para ser movido para "Agendado" após o pagamento.
+    const leverCard = await (leverCaptureRef.current?.promise ?? Promise.resolve(null)).catch(() => null);
 
     const payload = {
       name: form.name.trim(),
@@ -495,6 +497,7 @@ export default function App() {
       investmentId: form.investmentId,
       workRoutineId: form.workRoutineId,
       slot: form.slot,
+      cardId: leverCard?.cardId || "",
       tracking: getTrackingPayload()
     };
     const trackingKey = payload.phone;
